@@ -1,21 +1,45 @@
 """Server-side optional OpenAI-compatible provider; no tool execution."""
 import os
 import httpx
+import json
+_runtime={}
+def setting(name,default=None):return _runtime.get(name,os.getenv(name,default))
+
+def install_settings(app):
+    from pydantic import BaseModel,Field
+    class Settings(BaseModel):
+        base_url:str=Field(max_length=500)
+        model:str=Field(max_length=120)
+        api_key:str=Field('',max_length=1000)
+        embedding_model:str=Field('',max_length=120)
+    @app.get('/api/model/settings')
+    def get_settings():
+        return {'base_url':setting('LLM_BASE_URL','https://api.openai.com/v1'),'model':setting('LLM_MODEL',''),'configured':bool(setting('LLM_API_KEY')),'embedding_model':setting('EMBEDDING_MODEL','')}
+    @app.post('/api/model/settings')
+    def set_settings(body:Settings):
+        from urllib.parse import urlsplit
+        url=urlsplit(body.base_url)
+        if not url.hostname or url.username or url.password or url.query or url.fragment or (url.scheme!='https' and not(url.scheme=='http' and url.hostname in {'127.0.0.1','localhost'})):raise HTTPException(400,'API地址需HTTPS或本地服务，不允许内嵌凭据')
+        _runtime.update(LLM_BASE_URL=body.base_url.rstrip('/'),LLM_MODEL=body.model.strip(),EMBEDDING_MODEL=body.embedding_model.strip())
+        if body.api_key:_runtime['LLM_API_KEY']=body.api_key
+        return {'ok':True,'notice':'配置仅在内存保存，重启后使用环境变量；没有发起付费请求'}
 from fastapi import HTTPException
 
 
 def provider_status():
-    return {"configured": bool(os.getenv("LLM_API_KEY") and os.getenv("LLM_MODEL")),
-            "model": os.getenv("LLM_MODEL", "未配置")}
+    return {"configured": bool(setting("LLM_API_KEY") and setting("LLM_MODEL")),
+            "model": setting("LLM_MODEL", "未配置")}
 
 
 def generate(system, prompt):
-    key = os.getenv("LLM_API_KEY")
-    model = os.getenv("LLM_MODEL")
+    key = setting("LLM_API_KEY")
+    model = setting("LLM_MODEL")
     if not key or not model:
         raise HTTPException(503, "请在服务器设置 LLM_API_KEY 和 LLM_MODEL；核心功能无需模型")
-    base = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-    if not base.startswith("https://") and not base.startswith("http://127.0.0.1:"):
+    base = setting("LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+    from urllib.parse import urlsplit
+    url=urlsplit(base)
+    if not url.hostname or url.username or url.password or url.query or url.fragment or (url.scheme!="https" and not (url.scheme=="http" and url.hostname in {"127.0.0.1","localhost"})):
         raise HTTPException(503, "模型地址必须为 HTTPS 或本地回环服务")
     try:
         with httpx.Client(timeout=45, follow_redirects=False, trust_env=False) as client:
@@ -30,3 +54,32 @@ def generate(system, prompt):
             return result[:20000]
     except (httpx.HTTPError, KeyError, ValueError, TypeError):
         raise HTTPException(502, "模型请求失败，请检查地址、模型、额度与网络；密钥不会出现在错误信息中") from None
+
+
+def generate_stream(system,prompt):
+    """OpenAI-compatible SSE deltas; provider errors never expose credentials."""
+    from urllib.parse import urlsplit
+    key=setting('LLM_API_KEY');model=setting('LLM_MODEL');base=setting('LLM_BASE_URL','https://api.openai.com/v1').rstrip('/')
+    url=urlsplit(base)
+    if not key or not model:raise HTTPException(503,'请先配置API Key与模型')
+    if not url.hostname or url.username or url.password or url.query or url.fragment or (url.scheme!='https' and not(url.scheme=='http' and url.hostname in {'127.0.0.1','localhost'})):raise HTTPException(503,'模型地址无效')
+    length=0;complete=False
+    try:
+        with httpx.Client(timeout=60,follow_redirects=False,trust_env=False) as client:
+            with client.stream('POST',base+'/chat/completions',headers={'Authorization':'Bearer '+key},json={'model':model,'stream':True,'messages':[{'role':'system','content':system},{'role':'user','content':prompt}]}) as response:
+                response.raise_for_status()
+                for line in response.iter_lines():
+                    if not line.startswith('data:'):continue
+                    data=line[5:].strip()
+                    if data=='[DONE]':complete=True;break
+                    body=json.loads(data)
+                    if body.get('error'):raise ValueError('provider error')
+                    choices=body.get('choices',[])
+                    if not choices:continue
+                    piece=choices[0].get('delta',{}).get('content') or ''
+                    if not isinstance(piece,str):raise ValueError('invalid delta')
+                    length+=len(piece)
+                    if length>20000:raise ValueError('answer limit')
+                    if piece:yield piece
+        if not complete or not length:raise ValueError('incomplete answer')
+    except (httpx.HTTPError,ValueError,KeyError,TypeError):raise HTTPException(502,'模型流式请求失败或中断；未保存未完成回答') from None
