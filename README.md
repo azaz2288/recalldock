@@ -41,7 +41,7 @@ python -m unittest discover -s tests -v
 python -m compileall -q app tests
 ```
 
-24项全部通过，包含真实文本PDF、检索前权限过滤、摄取完成、版本保留、备份恢复重建、Embedding mock、索引并发修改拒绝、追问隐私、流式引用校验及预览变更拦截。模型使用mock，未调用付费API。 Linux/Windows CI使用同一提交验证。
+26项全部通过，包含真实文本PDF、检索前权限过滤、摄取完成、版本保留、备份恢复重建、Embedding mock、索引并发修改拒绝、追问隐私、流式引用校验及预览变更拦截。模型使用mock，未调用付费API。 Linux/Windows CI使用同一提交验证。
 
 ## 已知边界
 
@@ -56,3 +56,5 @@ python -m compileall -q app tests
 [架构设计](docs/DESIGN.md) · [路线图](docs/ROADMAP.md) · [验收记录](docs/PROGRESS.md)
 
 MIT License。用户导入内容不随源码发布。
+
+使用体验修正：常见TXT编码自动处理、生成停止入口、流中断状态清理与手机对话框适配已接入。真实模型调用仍需自配Key并验收。
