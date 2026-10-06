@@ -1,5 +1,14 @@
 # 开发记录
 
+## 2026-10-07 v0.2.1 回收站阶段
+
+- 旧DELETE不可恢复，新增softtrash/explicitrestore/metadata分页/原子审计，正文/索引/版本保留。新检索统计、词项及semantic、preview/reindex都过滤trash；重复文件普通/后台导入不复活，revision二次状态检查。
+- 首12新测试修前12fail/2error含子case，不能当14独立漏洞；实现后pass。再扩fault/legacy/metadata/history/queue等合计17新，最终43方法通过。全43初次1error是mock共享time.time影响httpcookiejar，改局部module绑定后全过。tests/evaluate强制tempbootstrap，未打开用户资料。
+- 合成8895实际检索三十天→移入noevidence→恢复三十天，23trash20+3分页，当前回答清除；390×844dialog358px、body/dialog无overflow，console error/warn空。临时视口恢复，真实手机未连接；没有付费provider/OCR调用。
+- 50000合成metadata尾页offset49900/100条测量0.088741/0.043750/0.044355秒，Python allocation峰1031560/177050/162464B；第一个cold，无独立warmup，不计SQLite原生RSS、不是正文检索吞吐/生产SLA。旧五题BM25/hybrid Recall@3=1.0与拒答流程重验，不夸为公开领域准确率。
+- compile app/tests/tools、pipcheck、Node全JS及根维护5通过。发布完整SHA/同SHACI证据写在本机maintenance；当前未通过不借父绿灯。分段预览/进度/大文档策略及其他未完项保留。
+- 回收站/历史不是擦除，进行中证据快照不可收回；旧永久删除不可恢复。JSON恢复只当前片段、trash状态与重建索引，不含版本/消息/账户权限/远程向量；旧客户端会忽略状态，升级需停旧进程且备份。维护不重启用户8768/不读私人库。
+
 ## v0.1 验证
 
 - 文本/PDF导入、页面分块、词项索引、检索证据、API上下文预览和引用校验实现。

@@ -30,7 +30,8 @@ def install_ingest(app,root,access,identity):
                     kb=db.execute('SELECT owner FROM knowledge_bases WHERE id=?',(job['kb_id'],)).fetchone()
                     grant=db.execute("SELECT 1 FROM members WHERE kb_id=? AND user_id=? AND role='editor'",(job['kb_id'],job['user_id'])).fetchone()
                     if not kb or (kb[0]!=job['user_id'] and not grant):raise HTTPException(403,'摄取期间编辑权限已撤销')
-                    old=db.execute('SELECT id FROM documents WHERE digest=?',(digest,)).fetchone()
+                    old=db.execute('SELECT id,deleted_at FROM documents WHERE digest=?',(digest,)).fetchone()
+                    if old and old['deleted_at']>0:raise HTTPException(409,'相同文档已在回收站，请明确恢复后再使用')
                     ident=old[0] if old else uuid.uuid4().hex
                     if not old:
                         db.execute('INSERT INTO documents(id,name,digest,kind,pages,characters,created,kb_id,version) VALUES(?,?,?,?,?,?,?,?,?)',(ident,job['name'],digest,suffix,len(pages),sum(len(t) for _,t in pages),time.time(),job['kb_id'],1))
@@ -83,14 +84,14 @@ def install_ingest(app,root,access,identity):
     def revise(ident:str,request:Request,file:UploadFile=File(...)):
         from .main import extract
         with database(root) as db:doc=db.execute('SELECT * FROM documents WHERE id=?',(ident,)).fetchone()
-        if not doc:raise HTTPException(404,'文档不存在')
+        if not doc or doc['deleted_at']>0:raise HTTPException(404,'活动文档不存在')
         access(request,doc['kb_id'],True);suffix=Path(file.filename or '').suffix.lower()
         if suffix not in {'.txt','.md','.pdf'}:raise HTTPException(400,'文档格式不支持')
         raw=read_upload(file,20*1024*1024);pages=extract(raw,suffix);digest=hashlib.sha256(doc['kb_id'].encode()+raw).hexdigest()
         with database(root) as db:
             db.execute('BEGIN IMMEDIATE');old=[dict(r) for r in db.execute('SELECT idx,page,text FROM chunks WHERE document_id=? ORDER BY idx',(ident,))]
-            current=db.execute('SELECT version FROM documents WHERE id=?',(ident,)).fetchone()
-            if not current or current[0]!=doc['version']:raise HTTPException(409,'文档已被其他操作更新，请重试')
+            current=db.execute('SELECT version,deleted_at FROM documents WHERE id=?',(ident,)).fetchone()
+            if not current or current[0]!=doc['version'] or current['deleted_at']>0:raise HTTPException(409,'文档已更新或移入回收站，请重试')
             if db.execute('SELECT 1 FROM documents WHERE digest=? AND id!=?',(digest,ident)).fetchone():raise HTTPException(409,'新内容与其他文档重复')
             db.execute('INSERT INTO document_versions VALUES(?,?,?,?,?)',(ident,doc['version'],doc['name'],json.dumps(old,ensure_ascii=False),time.time()))
             db.execute('DELETE FROM chunks WHERE document_id=?',(ident,))
@@ -101,13 +102,13 @@ def install_ingest(app,root,access,identity):
     @app.get('/api/ingest/documents/{ident}/versions')
     def versions(ident:str,request:Request):
         with database(root) as db:
-            doc=db.execute('SELECT kb_id FROM documents WHERE id=?',(ident,)).fetchone()
+            doc=db.execute('SELECT kb_id FROM documents WHERE id=? AND deleted_at=0',(ident,)).fetchone()
             if not doc:raise HTTPException(404,'文档不存在')
             access(request,doc[0]);return [dict(r) for r in db.execute('SELECT version,name,created FROM document_versions WHERE document_id=? ORDER BY version DESC',(ident,))]
     @app.get('/api/ingest/documents/{ident}/versions/{version}')
     def version_text(ident:str,version:int,request:Request):
         with database(root) as db:
-            doc=db.execute('SELECT kb_id FROM documents WHERE id=?',(ident,)).fetchone()
+            doc=db.execute('SELECT kb_id FROM documents WHERE id=? AND deleted_at=0',(ident,)).fetchone()
             if not doc:raise HTTPException(404,'文档不存在')
             access(request,doc[0]);row=db.execute('SELECT chunks_json FROM document_versions WHERE document_id=? AND version=?',(ident,version)).fetchone()
             if not row:raise HTTPException(404,'版本不存在')

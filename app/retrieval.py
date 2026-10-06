@@ -43,14 +43,14 @@ def index_chunk(db,ident,text):
 def retrieve(db,question,limit=6,kb='default',hybrid=True):
     terms=list(dict.fromkeys(tokens(question)))[:64]
     if not terms:return []
-    count=db.execute('SELECT count(*) FROM chunks c JOIN documents d ON d.id=c.document_id WHERE d.kb_id=?',(kb,)).fetchone()[0]
+    count=db.execute('SELECT count(*) FROM chunks c JOIN documents d ON d.id=c.document_id WHERE d.kb_id=? AND d.deleted_at=0',(kb,)).fetchone()[0]
     if not count:return []
     scores={}
-    average=db.execute('SELECT avg(c.length) FROM chunks c JOIN documents d ON d.id=c.document_id WHERE d.kb_id=?',(kb,)).fetchone()[0] or 1
+    average=db.execute('SELECT avg(c.length) FROM chunks c JOIN documents d ON d.id=c.document_id WHERE d.kb_id=? AND d.deleted_at=0',(kb,)).fetchone()[0] or 1
     for term in terms:
-        frequency=db.execute('SELECT count(*) FROM terms t JOIN chunks c ON c.id=t.chunk_id JOIN documents d ON d.id=c.document_id WHERE term=? AND d.kb_id=?',(term,kb)).fetchone()[0]
+        frequency=db.execute('SELECT count(*) FROM terms t JOIN chunks c ON c.id=t.chunk_id JOIN documents d ON d.id=c.document_id WHERE term=? AND d.kb_id=? AND d.deleted_at=0',(term,kb)).fetchone()[0]
         idf=math.log(1+(count-frequency+.5)/(frequency+.5))
-        for row in db.execute('SELECT t.chunk_id,t.tf,c.length FROM terms t JOIN chunks c ON c.id=t.chunk_id JOIN documents d ON d.id=c.document_id WHERE t.term=? AND d.kb_id=? LIMIT 10000',(term,kb)):
+        for row in db.execute('SELECT t.chunk_id,t.tf,c.length FROM terms t JOIN chunks c ON c.id=t.chunk_id JOIN documents d ON d.id=c.document_id WHERE t.term=? AND d.kb_id=? AND d.deleted_at=0 LIMIT 10000',(term,kb)):
             denominator=row['tf']+1.2*(1-.75+.75*row['length']/average)
             scores[row['chunk_id']]=scores.get(row['chunk_id'],0)+idf*row['tf']*2.2/denominator
     lexical=sorted(scores,key=lambda k:(-scores[k],k))

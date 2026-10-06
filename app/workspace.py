@@ -79,10 +79,10 @@ def install_workspace(app,root,identity):
     def reindex(kb:str,request:Request):
         access(request,kb,True)
         with database(root) as db:
-            rows=db.execute('SELECT c.id,c.text FROM chunks c JOIN documents d ON d.id=c.document_id WHERE d.kb_id=?',(kb,)).fetchall()
+            rows=db.execute('SELECT c.id,c.text FROM chunks c JOIN documents d ON d.id=c.document_id WHERE d.kb_id=? AND d.deleted_at=0',(kb,)).fetchall()
             for row in rows:
                 db.execute('DELETE FROM terms WHERE chunk_id=?',(row['id'],));db.execute('DELETE FROM vectors WHERE chunk_id=?',(row['id'],));index_chunk(db,row['id'],row['text'])
-            db.execute('UPDATE chunks SET length=length WHERE document_id IN (SELECT id FROM documents WHERE kb_id=?)',(kb,))
+            db.execute('UPDATE chunks SET length=length WHERE document_id IN (SELECT id FROM documents WHERE kb_id=? AND deleted_at=0)',(kb,))
         audit(identity(request)['id'],kb,'reindex',str(len(rows)));return {'chunks':len(rows)}
     @app.get('/api/workspace/bases/{kb}/backup')
     def backup(kb:str,request:Request):

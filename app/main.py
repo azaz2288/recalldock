@@ -14,6 +14,7 @@ from .common import prepare,mount_ui,database,data_root,read_upload,decode_text
 from .retrieval import chunks,index_chunk,retrieve,tokens
 from .llm import generate,generate_stream,provider_status,install_settings
 from .workspace import install_workspace
+from .trash import install_trash
 from .ingest import install_ingest
 from .backup import install_backup
 from .semantic import install_semantic,semantic_retrieve
@@ -58,7 +59,7 @@ def extract(raw,suffix):
 
 def create_app(root=None):
     root=Path(root or data_root('recalldock'))
-    app=prepare(FastAPI(title='RecallDock',version='0.2.0'),root)
+    app=prepare(FastAPI(title='RecallDock',version='0.2.1'),root)
     install_settings(app)
     identity=install_accounts(app,root)
     with database(root) as db:
@@ -75,6 +76,7 @@ def create_app(root=None):
             from .retrieval import local_vector
             db.execute('INSERT INTO vectors VALUES(?,?,?)',(row['id'],'feature-hash-v1',json.dumps(local_vector(row['text']))))
     access,save_message,audit=install_workspace(app,root,identity)
+    install_trash(app,root,access,identity)
     install_ingest(app,root,access,identity)
     install_semantic(app,root,access)
     install_backup(app,root,access)
@@ -85,7 +87,7 @@ def create_app(root=None):
     def documents(request:Request,kb_id:str=''):
         kb=access(request,kb_id)
         with database(root) as db:
-            return [dict(r) for r in db.execute('SELECT d.*,(SELECT count(*) FROM chunks c WHERE c.document_id=d.id) AS chunks FROM documents d WHERE kb_id=? ORDER BY created DESC',(kb,))]
+            return [dict(r) for r in db.execute('SELECT d.*,(SELECT count(*) FROM chunks c WHERE c.document_id=d.id) AS chunks FROM documents d WHERE kb_id=? AND deleted_at=0 ORDER BY created DESC',(kb,))]
 
     @app.post('/api/documents',status_code=201)
     def upload(request:Request,kb_id:str=Form(''),file:UploadFile=File(...)):
@@ -98,7 +100,9 @@ def create_app(root=None):
         segments=[(page,text) for page,content in pages for text in chunks(content)]
         with database(root) as db:
             old=db.execute('SELECT * FROM documents WHERE digest=?',(digest,)).fetchone()
-            if old:return {**dict(old),'duplicate':True}
+            if old:
+                if old['deleted_at']>0:raise HTTPException(409,'相同文档已在回收站，请明确恢复后再使用')
+                return {**dict(old),'duplicate':True}
             ident=uuid.uuid4().hex
             name=Path(file.filename.replace('\\','/')).name[:180]
             db.execute('INSERT INTO documents(id,name,digest,kind,pages,characters,created,kb_id) VALUES(?,?,?,?,?,?,?,?)',(ident,name,digest,suffix,len(pages),sum(len(t) for _,t in pages),time.time(),kb))
@@ -108,20 +112,10 @@ def create_app(root=None):
                 index_chunk(db,chunk_id,text)
             return {'id':ident,'name':name,'chunks':len(segments),'duplicate':False}
 
-    @app.delete('/api/documents/{ident}')
-    def remove(ident:str,request:Request):
-        with database(root) as db:
-            row=db.execute('SELECT kb_id FROM documents WHERE id=?',(ident,)).fetchone()
-            if not row:raise HTTPException(404,'文档不存在')
-            access(request,row[0],True)
-            cursor=db.execute('DELETE FROM documents WHERE id=?',(ident,))
-            if not cursor.rowcount:raise HTTPException(404,'文档不存在')
-        return {'ok':True}
-
     @app.get('/api/documents/{ident}/chunks')
     def document_chunks(ident:str,request:Request,offset:int=Query(0,ge=0)):
         with database(root) as db:
-            doc=db.execute('SELECT kb_id FROM documents WHERE id=?',(ident,)).fetchone()
+            doc=db.execute('SELECT kb_id FROM documents WHERE id=? AND deleted_at=0',(ident,)).fetchone()
             if not doc:raise HTTPException(404,'文档不存在')
             access(request,doc[0])
             return [dict(r) for r in db.execute('SELECT idx,page,text FROM chunks WHERE document_id=? ORDER BY idx LIMIT 50 OFFSET ?',(ident,offset))]
@@ -129,7 +123,9 @@ def create_app(root=None):
     def evidence(question,request,kb,hybrid=True):
         question=question.strip()
         if not question:raise HTTPException(400,'问题不能为空')
-        with database(root) as db:return retrieve(db,question,kb=kb,hybrid=hybrid)
+        with database(root) as db:
+            db.execute('BEGIN')
+            return retrieve(db,question,kb=kb,hybrid=hybrid)
 
     def conversation(body,request,kb):
         history=[];parent=body.parent_id

@@ -1,5 +1,6 @@
 import unittest
 from fastapi import HTTPException
+from test_support import bootstrap
 from app.main import extract
 
 class TextImportTests(unittest.TestCase):

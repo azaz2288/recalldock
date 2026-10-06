@@ -1,6 +1,6 @@
 # RecallDock · 有证据的AI知识库
 
-**v0.2 可运行功能版**。默认只允许本机访问。
+**v0.2.1 可运行功能版**。默认只允许本机访问。
 
 ## 已实现
 
@@ -13,6 +13,8 @@
 - 可选本地Tesseract OCR适配，页面配置API/模型/Key/Embedding模型
 
 ## 运行
+
+文档管理 → “移入回收站”只停止新检索，不永久删除正文/索引/版本。打开“文档回收站”可分页查看并恢复；写操作需要所有者或编辑权限。重复导入同一已移入的文件会409提示主动恢复，不会偷偷复活。没有自动过期、清空或永久删除入口。
 
 Python 3.12，Windows PowerShell：
 
@@ -38,12 +40,20 @@ python -m venv .venv
 
 ```powershell
 python -m unittest discover -s tests -v
-python -m compileall -q app tests
+python -m compileall -q app tests tools
+python tools/evaluate.py
 ```
 
-26项全部通过，包含真实文本PDF、检索前权限过滤、摄取完成、版本保留、备份恢复重建、Embedding mock、索引并发修改拒绝、追问隐私、流式引用校验及预览变更拦截。模型使用mock，未调用付费API。 Linux/Windows CI使用同一提交验证。
+43项回归本地通过（26原有+17回收站方法），包含真实文本PDF、权限过滤、旧schema迁移、活动统计/两种检索排除回收站、版本恢复、同步/后台重复导入保护、审计失败整事务回滚、备份trash状态/旧版兼容/非法时间戳与第二文档写入失败原子回滚。远程Embedding和模型用mock，未调用付费API。测试初始化强制临时APP_DATA_DIR，不打开已有data/；所有前端脚本另做Node语法检查。跨平台结果以当前提交CI为准。
+
+合成演示：`python tools/trash_demo.py`，临时书库与8895回环服务，回车停止/清理；不访问已有8768库。`python tools/trash_benchmark.py`只创建合成50000条文档metadata，报告尾页TestClient计时和Python allocation，不加载真实文档、不代表吞吐/SLA。
 
 ## 已知边界
+
+- 回收站不是安全擦除。正文、索引、版本及历史问答的来源快照仍存本机；之前已经发送给模型的资料不能收回，已在进行的请求可能按它开始时的证据快照完成。UI当前生成时要求先停止/完成才能移入，但这不是跨客户端并发取消保证。
+- 旧v0.2的DELETE为永久删除且无法从本版本凭空恢复。升级需先完整备份/停服务，不同时运行旧进程（旧查询忽略deleted_at，仍可检索trash）；本轮没有重启或迁移用户正在运行的服务。
+- JSON备份version=1新增deleted_at并包含回收站文档，旧缺字段按active导入；旧客户端忽略字段会恢复为active。恢复仅导入当前片段/重建索引，仍不包含旧文档版本、消息、用户授权或远程向量；重复digest跳过，不改变既有文档状态。全APP_DATA_DIR停机备份用于完整恢复。
+- 活动片段预览仍只返回50项；导入进度、大文档配额与回收站原文预览仍待完成。回收站API每页1–100，UI20条；OFFSET分页并发变更时可移动，不承诺跨页冻结快照。
 
 - 默认词项特征向量不是语义语言模型；远程Embedding需自配模型、API Key与额度。
 - 流式内容生成中尚未校验；最终引用无效或连接中断不保存为成功回答。有效编号不保证事实正确。

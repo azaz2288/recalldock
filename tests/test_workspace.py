@@ -4,6 +4,7 @@ def synthetic_password(suffix):
 from pathlib import Path
 import tempfile,unittest,json,time
 from unittest.mock import patch
+from test_support import bootstrap
 from app.common import database
 from app.ocr import ocr_page
 from fastapi.testclient import TestClient

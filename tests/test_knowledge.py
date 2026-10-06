@@ -6,6 +6,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 from pypdf import PdfWriter
 from pypdf.generic import DictionaryObject,NameObject,DecodedStreamObject
+from test_support import bootstrap
 from app.main import create_app
 from app.retrieval import chunks,tokens
 
@@ -55,7 +56,7 @@ class KnowledgeTests(unittest.TestCase):
         for text in ['虚构结论[99]','没有引用的回答']:
             with patch('app.main.generate',return_value=text):
                 self.assertEqual(self.client.post('/api/ask',json={'question':'备份','use_ai':True}).status_code,502)
-    def test_delete_cascades_retrieval_index(self):
+    def test_move_to_trash_excludes_retrieval(self):
         ident=self.upload().json()['id']
         self.assertEqual(self.client.delete('/api/documents/'+ident).status_code,200)
         answer=self.client.post('/api/ask',json={'question':'备份'}).json()

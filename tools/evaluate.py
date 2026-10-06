@@ -1,11 +1,12 @@
 """Reproducible synthetic retrieval evaluation; no provider calls."""
 from pathlib import Path
-import sys,tempfile,json
+import sys,tempfile,json,os
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from fastapi.testclient import TestClient
-from app.main import create_app
 cases=[('备份','备份文件保留三十天，每晚运行数据库备份。','备份文件保留多久'),('认证','会话有效期七天，退出登录后令牌立即撤销。','登录会话有效期'),('媒体','上传视频使用后台转码，生成封面和HLS。','视频上传后如何处理'),('阅读','阅读器支持EPUB导入和选段批注。','EPUB可以添加批注吗'),('权限','只读成员可以检索资料，但不能删除文档。','只读成员能删除吗')]
 with tempfile.TemporaryDirectory() as tmp:
+    os.environ['APP_DATA_DIR']=str(Path(tmp)/'bootstrap')
+    from app.main import create_app
     client=TestClient(create_app(Path(tmp)))
     for title,text,q in cases:client.post('/api/documents',files={'file':(title+'.txt',text.encode())})
     report={}
