@@ -1,5 +1,13 @@
 # 开发记录
 
+## 2026-10-12 v0.2.2 当前原文分页
+
+- 新/page端点有限items+total/next_offset/version；单读快照内权限/active/计数/有序正文，expected_version不一致409，no-store，旧/chunks列表兼容。UI20项/前后页/重新读取/关闭与切库代次，失败清旧正文，当前title纯文本/content转义；修复queued close事件不能清重开的view。
+- 6新增Python方法（43原有→49）与6Node actual shipped-handler测试通过：>50尾部独立SQL序列、空/越界/50边界/非法参数、trash/restart/restore、reader撤权、修订409、COUNT后并发revision仍返回同份旧snapshot；UI乱序/关闭/切库/版本/重开/错误metadata/转义。首旧实现9failure/3errors含subcases；fixture Proxy self遮蔽导致1error和Windows清理继发error，改捕获外层test后6target通过，不弱化snapshot验收。
+- 完整49方法15.887s、Node6/125.7043ms、compile/JS/pipcheck/diff以及五题合成eval通过（Recall@3=1.0只是五题流程，不代表公开领域准确率）。浏览器和发布当前SHA证据见根每日报告；不调用付费模型/不打开已有知识库。
+- cua/node_repl均初始化失败（系统路径不存在），reset后仍失败；改用独立headless Chrome/已有隔离Playwright实际测试。首次翻页断言通过但favicon404触发console严格失败，添加本地SVG favicon后全通过：56合成片段20+20+16/尾标记/上一页/关闭重开/切空库再返回；390×844 body390、dialog358/scroll=client356，console error/warn空。截图在根reports，真实手机未验；8899服务正常Enter停并清理，无listener、不碰旧服务。第一次demo非tty inputEOF立即停止，后用tty启动。
+- 单页事务不是跨页冻结snapshot，恶意本机写库/深OFFSET与COUNT资源预算未保证；历史版本正文仍旧全量逻辑，导入进度/配额与其他路线未完成。未重启用户8768服务。
+
 ## 2026-10-07 v0.2.1 回收站阶段
 
 - 旧DELETE不可恢复，新增softtrash/explicitrestore/metadata分页/原子审计，正文/索引/版本保留。新检索统计、词项及semantic、preview/reindex都过滤trash；重复文件普通/后台导入不复活，revision二次状态检查。

@@ -15,6 +15,7 @@ from .retrieval import chunks,index_chunk,retrieve,tokens
 from .llm import generate,generate_stream,provider_status,install_settings
 from .workspace import install_workspace
 from .trash import install_trash
+from .document_pages import install_document_pages
 from .ingest import install_ingest
 from .backup import install_backup
 from .semantic import install_semantic,semantic_retrieve
@@ -59,7 +60,7 @@ def extract(raw,suffix):
 
 def create_app(root=None):
     root=Path(root or data_root('recalldock'))
-    app=prepare(FastAPI(title='RecallDock',version='0.2.1'),root)
+    app=prepare(FastAPI(title='RecallDock',version='0.2.2'),root)
     install_settings(app)
     identity=install_accounts(app,root)
     with database(root) as db:
@@ -77,6 +78,7 @@ def create_app(root=None):
             db.execute('INSERT INTO vectors VALUES(?,?,?)',(row['id'],'feature-hash-v1',json.dumps(local_vector(row['text']))))
     access,save_message,audit=install_workspace(app,root,identity)
     install_trash(app,root,access,identity)
+    install_document_pages(app,root,identity)
     install_ingest(app,root,access,identity)
     install_semantic(app,root,access)
     install_backup(app,root,access)
