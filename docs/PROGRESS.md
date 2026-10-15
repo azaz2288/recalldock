@@ -1,5 +1,11 @@
 # 开发记录
 
+## 2026-10-15 v0.2.3 摄取进度与容量可见性
+
+- `ingest_jobs` 增加可向后兼容的 `progress`、`stage`、`bytes_total`、`items_done`、`items_total` 字段；入队、读取、准备、完成、取消和失败都更新持久状态。
+- 摄取任务面板显示阶段、百分比、字节数和片段计数，避免长文档导入时只能看到 queued/running；重启后仍可读取最后状态。
+- 新增合成大文本进度/字节预算回归；未引入真实用户资料、并行调度或硬CPU/RSS配额。
+
 ## 2026-10-12 v0.2.2 当前原文分页
 
 - 新/page端点有限items+total/next_offset/version；单读快照内权限/active/计数/有序正文，expected_version不一致409，no-store，旧/chunks列表兼容。UI20项/前后页/重新读取/关闭与切库代次，失败清旧正文，当前title纯文本/content转义；修复queued close事件不能清重开的view。

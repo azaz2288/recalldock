@@ -1,6 +1,6 @@
 # RecallDock · 有证据的AI知识库
 
-**v0.2.2 可运行功能版**。默认只允许本机访问。
+**v0.2.3 可运行功能版**。默认只允许本机访问。
 
 ## 已实现
 
@@ -11,6 +11,7 @@
 - 问题历史与来源快照、追问上文、反馈、操作记录、知识库备份与校验恢复
 - AI上下文预览、来源变化检测、真实服务端SSE增量、完成引用校验；离线检索无需Key
 - 可选本地Tesseract OCR适配，页面配置API/模型/Key/Embedding模型
+- 后台摄取任务显示持久化阶段、百分比、字节预算和片段计数；重启后可继续观察任务状态
 
 ## 运行
 
@@ -45,7 +46,7 @@ python tools/evaluate.py
 node --test tools/test-document-pages.mjs
 ```
 
-49项Python回归本地通过（43原有+6原文分页方法），另6项Node实际界面处理器测试覆盖乱序响应、关闭/切库、版本变化、重开与转义。Python含分页完整尾部、旧API兼容、权限撤销、回收站拒绝、参数边界及并发修订单读快照。远程Embedding和模型用mock，未调用付费API。测试初始化强制临时APP_DATA_DIR，不打开已有data/；所有前端脚本另做Node语法检查。跨平台结果以当前提交CI为准。
+50项Python回归本地通过（含摄取进度/字节预算边界），另6项Node实际界面处理器测试覆盖乱序响应、关闭/切库、版本变化、重开与转义。Python含分页完整尾部、旧API兼容、权限撤销、回收站拒绝、参数边界及并发修订单读快照。远程Embedding和模型用mock，未调用付费API。测试初始化强制临时APP_DATA_DIR，不打开已有data/；所有前端脚本另做Node语法检查。跨平台结果以当前提交CI为准。
 
 合成演示：`python tools/trash_demo.py`，临时书库与8895回环服务，回车停止/清理；不访问已有8768库。`python tools/trash_benchmark.py`只创建合成50000条文档metadata，报告尾页TestClient计时和Python allocation，不加载真实文档、不代表吞吐/SLA。
 
@@ -54,7 +55,7 @@ node --test tools/test-document-pages.mjs
 - 回收站不是安全擦除。正文、索引、版本及历史问答的来源快照仍存本机；之前已经发送给模型的资料不能收回，已在进行的请求可能按它开始时的证据快照完成。UI当前生成时要求先停止/完成才能移入，但这不是跨客户端并发取消保证。
 - 旧v0.2的DELETE为永久删除且无法从本版本凭空恢复。升级需先完整备份/停服务，不同时运行旧进程（旧查询忽略deleted_at，仍可检索trash）；本轮没有重启或迁移用户正在运行的服务。
 - JSON备份version=1新增deleted_at并包含回收站文档，旧缺字段按active导入；旧客户端忽略字段会恢复为active。恢复仅导入当前片段/重建索引，仍不包含旧文档版本、消息、用户授权或远程向量；重复digest跳过，不改变既有文档状态。全APP_DATA_DIR停机备份用于完整恢复。
-- 当前原文UI每页20片段，可前后翻页并显示版本/总数；新`GET /api/documents/{id}/chunks/page`提供offset、limit（1–50）、kb_id和expected_version。后续页版本变化返回409，清空旧页并要求明确重新读取；每次请求权限、metadata、count和片段来自同一SQLite读快照，响应no-store。旧`/chunks`保留列表/最多50项兼容。不是跨请求冻结快照，也不抵抗本机恶意写库者；旧版原文分页、导入进度、大文档配额与回收站原文预览未完成。回收站metadata分页在并发变更时仍可移动。
+- 当前原文UI每页20片段，可前后翻页并显示版本/总数；新`GET /api/documents/{id}/chunks/page`提供offset、limit（1–50）、kb_id和expected_version。后续页版本变化返回409，清空旧页并要求明确重新读取；每次请求权限、metadata、count和片段来自同一SQLite读快照，响应no-store。旧`/chunks`保留列表/最多50项兼容。摄取任务面板显示持久化阶段、进度、字节数和片段计数。不是跨请求冻结快照，也不抵抗本机恶意写库者；旧版原文分页、大文档配额与回收站原文预览未完成。回收站metadata分页在并发变更时仍可移动。
 
 原文合成演示：`python tools/pages_demo.py`使用临时目录及8899回环服务，回车正常停止/清理，不打开已有8768。可选实际Chrome回归：安装独立测试用Playwright后`node tools/browser-pages.mjs`，仅针对该合成演示；也支持PLAYWRIGHT_MODULE指向已有隔离安装，无需更改运行依赖。
 

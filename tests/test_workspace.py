@@ -45,6 +45,25 @@ class WorkspaceTests(unittest.TestCase):
         job=self.a.post('/api/ingest/jobs',data={'kb_id':self.kb},files={'file':('job.txt',b'test')}).json()['id']
         self.assertEqual(self.a.post('/api/ingest/jobs/'+job+'/cancel').status_code,200)
         self.assertEqual(self.a.get('/api/ingest/jobs?kb_id='+self.kb).json()[0]['state'],'cancelled')
+
+    def test_ingest_job_reports_durable_progress_and_byte_budget(self):
+        raw=('进度片段。'*1500).encode()
+        with TestClient(self.app) as active:
+            active.cookies.update(self.a.cookies)
+            job=active.post('/api/ingest/jobs',data={'kb_id':self.kb},files={'file':('progress.txt',raw)}).json()['id']
+            row=next(r for r in active.get('/api/ingest/jobs?kb_id='+self.kb).json() if r['id']==job)
+            self.assertEqual(row['state'],'queued')
+            self.assertEqual(row['progress'],0)
+            self.assertEqual(row['bytes_total'],len(raw))
+            for _ in range(100):
+                row=next(r for r in active.get('/api/ingest/jobs?kb_id='+self.kb).json() if r['id']==job)
+                if row['state'] not in {'queued','running'}: break
+                time.sleep(.03)
+            self.assertEqual(row['state'],'completed')
+            self.assertEqual(row['stage'],'completed')
+            self.assertEqual(row['progress'],100)
+            self.assertEqual(row['items_done'],row['items_total'])
+        time.sleep(.6)
     def test_backup_restore_reindexes_and_invalid_backup_is_atomic(self):
         self.document();backup=self.a.get('/api/workspace/bases/'+self.kb+'/backup').json()
         target=self.a.post('/api/workspace/bases',json={'name':'恢复目标'}).json()['id']

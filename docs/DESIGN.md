@@ -1,4 +1,4 @@
-# 架构设计 · v0.2.2
+# 架构设计 · v0.2.3
 
 retrieval.py维护中英文词项、BM25和词项特征融合；semantic.py处理显式远程向量调用并在提交前比较原文快照。workspace.py处理知识库权限和历史来源快照；ingest.py管理持久队列及事务版本更新；backup.py重建恢复索引；ocr.py本地渲染并调用Tesseract。main.py在检索前鉴权，完成回答后校验引用；llm.py提供普通和SSE兼容接口。
 
@@ -14,7 +14,7 @@ active列表/正文/版本API与BM25计数/均长/df/candidates、semantic query
 
 backup v1兼容新增deleted_at，完整预验证有限非负timestamp（bool/非object/NaN/inf/巨大整数拒绝），single transaction重建片段并恢复trash状态；无字段旧版active。重复digest仅skip不复活；该JSON仍不备份版本、消息、账号权限或远程向量（用完整数据目录停机备份），旧客户端忽略字段会active化。旧服务v0.2不知道deleted_at不能并行运行，需升级前备份/停机；维护不改用户服务。
 
-trash.js在现有refresh之后绑定可恢复操作与dialog20项分页，clear当前来源与预览fingerprint；切库丢陈旧列表/关闭，生成中不允许生命周期UI操作。history保留快照并提示不是安全擦除。任务进度/大文件配额仍未实现。
+trash.js在现有refresh之后绑定可恢复操作与dialog20项分页，clear当前来源与预览fingerprint；切库丢陈旧列表/关闭，生成中不允许生命周期UI操作。history保留快照并提示不是安全擦除。摄取任务把阶段、进度、字节总量和片段计数持久化，UI只读展示；当前仍未实现硬CPU/RSS配额或实时推送。
 
 ## 当前原文分页
 

@@ -9,9 +9,20 @@ from .retrieval import chunks,index_chunk,tokens
 def install_ingest(app,root,access,identity):
     spool=root/'ingest';spool.mkdir(exist_ok=True)
     with database(root) as db:
-        db.executescript('''CREATE TABLE IF NOT EXISTS ingest_jobs(id TEXT PRIMARY KEY,kb_id TEXT,user_id TEXT,name TEXT,path TEXT,state TEXT,error TEXT,document_id TEXT,created REAL,updated REAL);
+        db.executescript('''CREATE TABLE IF NOT EXISTS ingest_jobs(id TEXT PRIMARY KEY,kb_id TEXT,user_id TEXT,name TEXT,path TEXT,state TEXT,error TEXT,document_id TEXT,created REAL,updated REAL,progress INTEGER DEFAULT 0,stage TEXT DEFAULT 'queued',bytes_total INTEGER DEFAULT 0,items_done INTEGER DEFAULT 0,items_total INTEGER DEFAULT 0);
         CREATE TABLE IF NOT EXISTS document_versions(document_id TEXT,version INTEGER,name TEXT,chunks_json TEXT,created REAL,PRIMARY KEY(document_id,version));''')
+        columns={row[1] for row in db.execute('PRAGMA table_info(ingest_jobs)')}
+        for column,ddl in (
+            ('progress','INTEGER DEFAULT 0'),
+            ('stage',"TEXT DEFAULT 'queued'"),
+            ('bytes_total','INTEGER DEFAULT 0'),
+            ('items_done','INTEGER DEFAULT 0'),
+            ('items_total','INTEGER DEFAULT 0'),
+        ):
+            if column not in columns:
+                db.execute(f'ALTER TABLE ingest_jobs ADD COLUMN {column} {ddl}')
         db.execute("UPDATE ingest_jobs SET state='queued' WHERE state='running'")
+        db.execute("UPDATE ingest_jobs SET stage='queued',progress=0 WHERE state='queued' AND (stage IS NULL OR stage='running')")
     stop=threading.Event()
     def worker():
         from .main import extract
@@ -19,10 +30,15 @@ def install_ingest(app,root,access,identity):
             with database(root) as db:
                 db.execute('BEGIN IMMEDIATE');job=db.execute("SELECT * FROM ingest_jobs WHERE state='queued' ORDER BY created LIMIT 1").fetchone()
                 if not job:continue
-                db.execute("UPDATE ingest_jobs SET state='running',updated=? WHERE id=?",(time.time(),job['id']))
+                db.execute("UPDATE ingest_jobs SET state='running',stage='reading',progress=5,updated=? WHERE id=?",(time.time(),job['id']))
             try:
-                raw=Path(job['path']).read_bytes();suffix=Path(job['name']).suffix.lower();pages=extract(raw,suffix)
+                raw=Path(job['path']).read_bytes();suffix=Path(job['name']).suffix.lower()
+                with database(root) as db:
+                    db.execute("UPDATE ingest_jobs SET bytes_total=?,updated=? WHERE id=? AND state='running'",(len(raw),time.time(),job['id']))
+                pages=extract(raw,suffix)
                 parts=[(page,text) for page,content in pages for text in chunks(content)]
+                with database(root) as db:
+                    db.execute("UPDATE ingest_jobs SET stage='prepared',progress=35,items_total=?,updated=? WHERE id=? AND state='running'",(len(parts),time.time(),job['id']))
                 digest=hashlib.sha256(job['kb_id'].encode()+raw).hexdigest()
                 with database(root) as db:
                     db.execute('BEGIN IMMEDIATE');state=db.execute('SELECT state FROM ingest_jobs WHERE id=?',(job['id'],)).fetchone()[0]
@@ -37,12 +53,14 @@ def install_ingest(app,root,access,identity):
                         db.execute('INSERT INTO documents(id,name,digest,kind,pages,characters,created,kb_id,version) VALUES(?,?,?,?,?,?,?,?,?)',(ident,job['name'],digest,suffix,len(pages),sum(len(t) for _,t in pages),time.time(),job['kb_id'],1))
                         for index,(page,text) in enumerate(parts):
                             key=f'{ident}-{index:06}';db.execute('INSERT INTO chunks VALUES(?,?,?,?,?,?)',(key,ident,index,page,text,len(tokens(text))));index_chunk(db,key,text)
-                    db.execute("UPDATE ingest_jobs SET state='completed',document_id=?,updated=? WHERE id=?",(ident,time.time(),job['id']))
+                    db.execute("UPDATE ingest_jobs SET state='completed',stage='completed',progress=100,items_done=?,items_total=?,document_id=?,updated=? WHERE id=?",(len(parts),len(parts),ident,time.time(),job['id']))
             except Exception as exc:
                 error=exc.detail if isinstance(exc,HTTPException) else '摄取失败，请检查文档或重试'
-                with database(root) as db:db.execute("UPDATE ingest_jobs SET state='failed',error=?,updated=? WHERE id=? AND state!='cancelled'",(str(error)[:300],time.time(),job['id']))
+                with database(root) as db:db.execute("UPDATE ingest_jobs SET state='failed',stage='failed',error=?,updated=? WHERE id=? AND state!='cancelled'",(str(error)[:300],time.time(),job['id']))
             finally:
                 with database(root) as db:state=db.execute('SELECT state FROM ingest_jobs WHERE id=?',(job['id'],)).fetchone()[0]
+                if state=='cancelled':
+                    with database(root) as db:db.execute("UPDATE ingest_jobs SET stage='cancelled',progress=0,updated=? WHERE id=?",(time.time(),job['id']))
                 if state in {'completed','cancelled'}:Path(job['path']).unlink(missing_ok=True)
     @asynccontextmanager
     async def lifespan(application):
@@ -55,7 +73,9 @@ def install_ingest(app,root,access,identity):
         kb=access(request,kb_id,True);name=Path(file.filename.replace('\\','/')).name[:180]
         if Path(name).suffix.lower() not in {'.txt','.md','.pdf'}:raise HTTPException(400,'支持TXT/MD/PDF')
         raw=read_upload(file,20*1024*1024);key=uuid.uuid4().hex;path=spool/(key+'.input');path.write_bytes(raw)
-        with database(root) as db:db.execute('INSERT INTO ingest_jobs VALUES(?,?,?,?,?,?,?,?,?,?)',(key,kb,identity(request)['id'],name,str(path),'queued','','',time.time(),time.time()))
+        with database(root) as db:
+            now=time.time()
+            db.execute('INSERT INTO ingest_jobs(id,kb_id,user_id,name,path,state,error,document_id,created,updated,progress,stage,bytes_total,items_done,items_total) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(key,kb,identity(request)['id'],name,str(path),'queued','','',now,now,0,'queued',len(raw),0,0))
         return {'id':key}
     @app.get('/api/ingest/jobs')
     def jobs(request:Request,kb_id:str=''):
@@ -68,7 +88,7 @@ def install_ingest(app,root,access,identity):
             if not row:raise HTTPException(404,'任务不存在')
             access(request,row['kb_id'],True)
             if row['state'] not in {'queued','running'}:raise HTTPException(409,'任务已结束')
-            db.execute("UPDATE ingest_jobs SET state='cancelled' WHERE id=?",(ident,))
+            db.execute("UPDATE ingest_jobs SET state='cancelled',stage='cancelled',progress=0,updated=? WHERE id=?",(time.time(),ident))
         if row['state']=='queued':Path(row['path']).unlink(missing_ok=True)
         return {'ok':True}
     @app.post('/api/ingest/jobs/{ident}/retry')
