@@ -13,7 +13,9 @@ function harness(){
     return elements.get(id);
   }
   const buttons=['a','b'].map(id=>({...element('version-button-'+id),dataset:{id}}));
-  const context=vm.createContext({document:{body:{append(){}},createElement:()=>element('version-dialog')},
+  const documentEvents={};
+  const context=vm.createContext({document:{body:{append(){}},createElement:()=>element('version-dialog'),
+    addEventListener:(name,fn)=>documentEvents[name]=fn},
     $:s=>element(s.slice(1)),$$:()=>buttons,selectedBase:'default',refresh:async()=>{},
     encodeURIComponent,esc:v=>String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'),
     empty:()=>'<empty>',toast:message=>errors.push(message),
@@ -23,7 +25,7 @@ function harness(){
     items:Array.from({length:Math.min(20,Math.max(0,total-offset))},(_,i)=>({page:1,idx:offset+i,text:`<history ${offset+i}>`})),
     total,offset,limit:20,next_offset:offset+20<total?offset+20:null});
   return {element,pending,context,closed,errors,page,ready:()=>context.refresh(),
-    open:id=>buttons.find(b=>b.dataset.id===id).onclick(),click:id=>element(id).onclick(),
+    open:id=>documentEvents.click({target:{closest:()=>buttons.find(b=>b.dataset.id===id)}}),click:id=>element(id).onclick(),
     choose:version=>element('version-list').events.click({target:{closest:()=>({dataset:{version:String(version)}})}})};
 }
 async function start(h,id='a'){
@@ -77,4 +79,10 @@ test('out-of-order document lists cannot replace newer document and empty versio
   h.pending[1].resolve([]);await b;h.pending[0].resolve([{version:1}]);await a;
   assert.equal(h.element('version-next').disabled,true);assert.doesNotMatch(h.element('version-list').innerHTML,/data-version/);
   assert.equal(h.element('version-content').innerHTML,'');
+});
+
+test('buttons rendered before or after controller installation work without an extra refresh',async()=>{
+  const h=harness();const action=h.open('a');h.pending[0].resolve([{version:1}]);await action;
+  const view=h.choose(1);h.pending[1].resolve(h.page());await view;
+  assert.match(h.element('version-page').textContent,/1–20/);
 });

@@ -26,7 +26,7 @@ document-pages.js包装refresh，20项当前原文/前后页/显式重新读取�
 
 document_pages.py独立历史/page端点在单BEGIN读事务中复验active文档与owner/member、可选kb_id和指定历史版本，JSON1按原数组整数序号遍历、count与LIMIT/OFFSET同一快照。旧document_versions.chunks_json不重写、不迁移；Python仅json.loads页面内对象并验证idx/page整数与text字符串，默认20最多50，offset限定32位非负、version为32位正数。坏JSON/非数组或页内坏片段409，缺版本404，响应no-store；旧全量历史API兼容。SQLite仍解析原数组，COUNT/深OFFSET及版本列表未限制到硬CPU/RSS预算，不声称流式存储或大文档性能门槛已完。
 
-version-pages.js独立dialog保留版本选择器、20项正文与前后页；每次请求捕获document/base/view/代次/版本，关闭/Escape/切库/refresh清旧内容，迟到列表或正文不能污染新view，queued close不清重开dialog。新页开始立即清正文/禁导航，错误只能重选版本或关闭；标题textContent、原文转义。版本快照不因后续revision变化，但每页重新鉴权/检查active；已开始的SQLite读snapshot可在撤权/移入trash后完成，不是跨客户端取消或擦除历史。
+version-pages.js独立dialog保留版本选择器、20项正文与前后页；document委托点击覆盖控制器加载前后创建的历史按钮，不依赖额外refresh绑定。每次请求捕获document/base/view/代次/版本，关闭/Escape/切库/refresh清旧内容，迟到列表或正文不能污染新view，queued close不清重开dialog。新页开始立即清正文/禁导航，错误只能重选版本或关闭；标题textContent、原文转义。版本快照不因后续revision变化，但每页重新鉴权/检查active；已开始的SQLite读snapshot可在撤权/移入trash后完成，不是跨客户端取消或擦除历史。
 
 - 默认词项特征向量不是语义语言模型；远程Embedding需自配模型、API Key与额度。
 - 流式内容生成中尚未校验；最终引用无效或连接中断不保存为成功回答。有效编号不保证事实正确。

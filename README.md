@@ -46,7 +46,7 @@ python tools/evaluate.py
 node --test tools/test-document-pages.mjs tools/test-version-pages.mjs
 ```
 
-58项Python回归本地通过，另12项Node实际界面处理器测试覆盖当前及历史原文分页、乱序响应、关闭/切库、版本变化、重开与转义。Python含完整尾部、旧API兼容、每页权限撤销、回收站拒绝、参数边界、损坏快照、并发单读快照及Python仅解码请求的历史片段。远程Embedding和模型用mock，未调用付费API。测试初始化强制临时APP_DATA_DIR，不打开已有data/；所有前端脚本另做Node语法检查。跨平台结果以当前提交CI为准。
+58项Python回归本地通过，另13项Node实际界面处理器测试覆盖当前及历史原文分页、乱序响应、关闭/切库、版本变化、重开、转义与初次渲染不依赖额外刷新。Python含完整尾部、旧API兼容、每页权限撤销、回收站拒绝、参数边界、损坏快照、并发单读快照及Python仅解码请求的历史片段。远程Embedding和模型用mock，未调用付费API。测试初始化强制临时APP_DATA_DIR，不打开已有data/；所有前端脚本另做Node语法检查。跨平台结果以当前提交CI为准。
 
 合成演示：`python tools/trash_demo.py`，临时书库与8895回环服务，回车停止/清理；不访问已有8768库。`python tools/trash_benchmark.py`只创建合成50000条文档metadata，报告尾页TestClient计时和Python allocation，不加载真实文档、不代表吞吐/SLA。
 

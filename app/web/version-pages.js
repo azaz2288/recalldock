@@ -47,6 +47,11 @@
   dialog.addEventListener('cancel',invalidate);
   dialog.addEventListener('close',()=>{if(!dialog.open)invalidate();});
   $('#kb-select').addEventListener('change',close);
+  // Startup requests can render rows before this script loads, or complete after it loads.
+  // Delegate instead of relying on a subsequent wrapped refresh to bind each button.
+  document.addEventListener('click',event=>{
+    const button=event.target.closest('.history-document');if(button)return open(button.dataset.id);
+  });
   const beforeHistoryRefresh=refresh;
-  refresh=async()=>{close();await beforeHistoryRefresh();$$('.history-document').forEach(button=>button.onclick=()=>open(button.dataset.id));};
+  refresh=async()=>{close();await beforeHistoryRefresh();};
 })();
