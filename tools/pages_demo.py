@@ -1,9 +1,12 @@
 """New temporary synthetic library; never open the existing user's service/data."""
 from pathlib import Path
-import os,sys,tempfile,threading,socket
+import argparse,os,sys,tempfile,threading,socket
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 
 def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--history',action='store_true',help='Keep the long original as version 1 and revise twice')
+    args=parser.parse_args()
     with socket.socket() as probe:probe.bind(('127.0.0.1',8899))
     with tempfile.TemporaryDirectory(prefix='recalldock-pages-demo-') as tmp:
         root=Path(tmp);os.environ['APP_DATA_DIR']=str(root/'bootstrap')
@@ -17,6 +20,11 @@ def main():
             result=client.post('/api/documents',files={'file':('原创合成长文.txt',text.encode())})
             if result.status_code!=201:raise RuntimeError('synthetic import failed')
             doc=result.json();print('Synthetic chunks:',doc['chunks'],flush=True)
+            if args.history:
+                for version in (2,3):
+                    revised=client.post('/api/ingest/documents/'+doc['id']+'/revise',
+                        files={'file':(f'v{version}.txt',f'Original synthetic current revision {version}'.encode())})
+                    if revised.status_code!=200:raise RuntimeError('synthetic revision failed')
             client.post('/api/workspace/bases',json={'name':'合成空库'})
         server=uvicorn.Server(uvicorn.Config(app,host='127.0.0.1',port=8899,log_level='warning'))
         thread=threading.Thread(target=server.run);thread.start()

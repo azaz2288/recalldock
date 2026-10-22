@@ -60,7 +60,7 @@ def extract(raw,suffix):
 
 def create_app(root=None):
     root=Path(root or data_root('recalldock'))
-    app=prepare(FastAPI(title='RecallDock',version='0.2.3'),root)
+    app=prepare(FastAPI(title='RecallDock',version='0.2.4'),root)
     install_settings(app)
     identity=install_accounts(app,root)
     with database(root) as db:

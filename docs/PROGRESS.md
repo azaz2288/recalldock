@@ -1,5 +1,14 @@
 # 开发记录
 
+## 2026-10-22 v0.2.4 旧版原文分页（America/New_York）
+
+- 新历史/page端点同BEGIN读事务复验active文档/owner/member/kb/version，JSON1原序COUNT与LIMIT/OFFSET，20默认/1–50/offset有界、no-store；不重写旧JSON/迁移或破坏旧API。只在Python解码该页对象，SQLite仍需解析完整历史数组，不称硬资源策略完成。
+- 先7新增方法在旧实现11fail/1error含参数subcase（page端点未实现/导入mock目标缺失），再实现后7通过；新增坏JSON/非数组409，共8新/58Python20.386s通过。涵盖56以上完整尾部与旧API等价、重启/再修订不变、每页撤权/trashed恢复、非法limit/offset/version、空页、Python仅页内解码、COUNT后并发trash仍返回同snapshot。原50方法保留；Starlette/httpx弃用警告非测试失败，未为此改项目环境。
+- 新6+原6共12Node121.2845ms通过，执行实际shipped控制器：57片段全部可翻、immutable版本选择、切版本/文档乱序、关闭/Escape/切库、queued close重开、撤权/错误metadata清正文和禁导航、转义。CI与根巡检均纳入新测试。compile app/tests/tools、全部JS语法、pipcheck和五题合成检索评测通过，五题Recall@3=1.0只验证流程，不代表真实领域效果。
+- Chrome156.0.8078.47独立临时8899合成库：真实56历史片段20+20+16和尾标记/上一页、v2独立正文、真实HTTP延迟v1切v2不覆盖、加载关闭迟到不复开、Escape重开、实际切库handler丢迟到通过。原生modal阻止背景物理交互，切库竞态用真实onchange程序触发，恢复时先物理回问答页再选库；不冒称模态背后点击可达。390×844 body390/dialog358、scroll=client356，console/pageerrors空；桌面/手机截图已视觉检查，正文/选择/前后页/关闭可读，无横溢出。首两次脚本因重复按钮strict selector、文档页知识库select隐藏而失败，属验收脚本定位/导航问题，修正后全通过。
+- 完整提交SHA/同SHA双平台CI证据见根本日维护报告，未通过不借旧CI。新版本列表仍全量、SQLite JSON1非硬CPU/RSS沙箱、已开始的读snapshot仍可完成；不做模型API/OCR调用、不读私人库、不恢复旧Verisnap任务或补造中断历史。
+- 追加超SQLite整数version与页内坏片段边界先复现1fail/3error（含子case），再限制version到1..2147483647、仅页内对象字段验证，返回422/409而非500/无效成功；不以恶意本机改库作为安全沙箱承诺。最终58/12以根发布报告为准。
+
 ## 2026-10-15 v0.2.3 摄取进度与容量可见性
 
 - `ingest_jobs` 增加可向后兼容的 `progress`、`stage`、`bytes_total`、`items_done`、`items_total` 字段；入队、读取、准备、完成、取消和失败都更新持久状态。

@@ -1,4 +1,4 @@
-# 架构设计 · v0.2.3
+# 架构设计 · v0.2.4
 
 retrieval.py维护中英文词项、BM25和词项特征融合；semantic.py处理显式远程向量调用并在提交前比较原文快照。workspace.py处理知识库权限和历史来源快照；ingest.py管理持久队列及事务版本更新；backup.py重建恢复索引；ocr.py本地渲染并调用Tesseract。main.py在检索前鉴权，完成回答后校验引用；llm.py提供普通和SSE兼容接口。
 
@@ -20,7 +20,13 @@ trash.js在现有refresh之后绑定可恢复操作与dialog20项分页，clear�
 
 document_pages.py单BEGIN读事务复验owner/member，读取active文档版本、count和idx/id稳定顺序的有限片段，新增(document_id,idx,id)索引。新独立/page端点不改变旧/chunks列表；offset0..2147483647、limit1..50、可选expected_version>=1，错版本409，错库404/无权403，no-store。SQLite WAL读期间修订提交不会混合旧metadata与新正文；下一请求重新鉴权并检查版本。没有跨页冻结事务/恶意本机写库防护，COUNT与深OFFSET仍需访问对应记录，无大文档吞吐承诺。
 
-document-pages.js最后包装refresh，20项当前原文/前后页/显式重新读取，关闭或切库清内容、generation+document/base/version校验丢弃迟到响应，错误不保留旧正文导航。原文HTML转义、标题textContent；原生close事件异步排队，已重新打开时不清新view。账户登录登出按原逻辑重载。当前文档分页切片完成，旧版正文、摄取进度/配额并未一起完成。
+document-pages.js包装refresh，20项当前原文/前后页/显式重新读取，关闭或切库清内容、generation+document/base/version校验丢弃迟到响应，错误不保留旧正文导航。原文HTML转义、标题textContent；原生close事件异步排队，已重新打开时不清新view。账户登录登出按原逻辑重载。摄取进度及旧版分页分别于v0.2.3/v0.2.4接入，硬资源配额仍未完成。
+
+## 历史原文分页（v0.2.4）
+
+document_pages.py独立历史/page端点在单BEGIN读事务中复验active文档与owner/member、可选kb_id和指定历史版本，JSON1按原数组整数序号遍历、count与LIMIT/OFFSET同一快照。旧document_versions.chunks_json不重写、不迁移；Python仅json.loads页面内对象并验证idx/page整数与text字符串，默认20最多50，offset限定32位非负、version为32位正数。坏JSON/非数组或页内坏片段409，缺版本404，响应no-store；旧全量历史API兼容。SQLite仍解析原数组，COUNT/深OFFSET及版本列表未限制到硬CPU/RSS预算，不声称流式存储或大文档性能门槛已完。
+
+version-pages.js独立dialog保留版本选择器、20项正文与前后页；每次请求捕获document/base/view/代次/版本，关闭/Escape/切库/refresh清旧内容，迟到列表或正文不能污染新view，queued close不清重开dialog。新页开始立即清正文/禁导航，错误只能重选版本或关闭；标题textContent、原文转义。版本快照不因后续revision变化，但每页重新鉴权/检查active；已开始的SQLite读snapshot可在撤权/移入trash后完成，不是跨客户端取消或擦除历史。
 
 - 默认词项特征向量不是语义语言模型；远程Embedding需自配模型、API Key与额度。
 - 流式内容生成中尚未校验；最终引用无效或连接中断不保存为成功回答。有效编号不保证事实正确。
